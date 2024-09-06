@@ -1,1 +1,291 @@
-sample content
+
+package com.posts.controllers;
+
+import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.posts.entities.Post;
+import com.posts.services.PostService;
+
+@Controller
+public class PostController {
+
+	@Autowired
+	PostService service;
+	
+	@PostMapping("/createPost")
+	public String createPost(@RequestParam ("caption") String caption,
+            @RequestParam("photo") MultipartFile photo,
+            Model model
+			) {
+		Post post = new Post();
+		post.setCaption(caption);
+		try {
+			post.setPhoto(photo.getBytes());
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		service.createPost(post);
+		List<Post> allPosts = service.fetchAllPosts();
+		model.addAttribute("allPosts", allPosts);
+		return "newPost";
+	}
+	
+	@GetMapping("/likePost")
+	public String likePost(@RequestParam Long id, Model model) {
+		Post post= service.getPost(id);
+		post.setLikes(post.getLikes() + 1);
+		service.updatePost(post);
+		
+		List<Post> allPosts = service.fetchAllPosts();
+		model.addAttribute("allPosts", allPosts);
+		return "posts";
+	}
+	
+	@GetMapping("/posts")
+	public String posts(Model model) {
+		
+		List<Post> allPosts = service.fetchAllPosts();
+		model.addAttribute("allPosts", allPosts);
+		return "posts";
+	}
+}
+
+
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Profile</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+</head>
+<body>
+    <h1>Post Details</h1>
+    <div class="profile-details">
+    <span th:each = "post:${allPosts}">
+        
+        <p><strong>Photo:</strong></p>
+        <img th:if="${post.photoBase64}" th:src="'data:image/jpeg;base64,' + ${post.photoBase64}" alt="Profile Photo" /> 
+        <p><strong>Caption:</strong> 
+        <span th:text="${post.caption}"></span></p>
+        
+        <p><strong>Likes:</strong> 
+        <span th:text="${post.likes}"></span></p>
+        
+        <form action="/likePost">
+        	<input name = "id" th:value="${post.id}">
+        	<input type="submit" value="LIKE POST">
+        </form>
+        
+        <form action="/addComment" method="post">
+        	<textarea name = "comments"></textarea>
+        	<input type="submit">
+        </form>
+        <hr />       
+      </span>  
+    </div>
+    
+</body>
+</html>
+
+
+package com.posts.services;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.posts.entities.Post;
+import com.posts.repositories.PostRepository;
+
+@Service
+public class PostServiceImplementation 
+			implements PostService{
+
+	@Autowired
+	PostRepository repo;
+
+	public void createPost(Post post) {
+		repo.save(post);
+	}
+
+	@Override
+	public List<Post> fetchAllPosts() {
+		return repo.findAll();
+	}
+
+	@Override
+	public Post getPost(Long id) {
+		return repo.findById(id).get();
+	}
+
+	@Override
+	public void updatePost(Post post) {
+		repo.save(post);
+	}
+}
+package com.posts.controllers;
+
+import java.util.List;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import com.posts.entities.Post;
+
+@Controller
+public class NavController {
+	@GetMapping("/")
+	public String newPost() {
+		return "newPost";
+	}
+	
+}
+
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>New Post</title>
+    <link rel="stylesheet" type="text/css" href="/css/style.css">
+</head>
+<body>
+    <h2>Profile Creation</h2>
+    <form id="profileForm" action="/createPost" method="post" enctype="multipart/form-data">
+        <textarea name="caption" placeholder="caption" required >
+        </textarea>
+        <br>
+        <br>
+        <input type="file" name="photo" accept="image/*" />
+        <br>
+        <button type="submit">POST</button>
+    </form>
+</body>
+</html>
+package com.posts.entities;
+
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
+
+import jakarta.persistence.Basic;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+
+@Entity
+public class Post {
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+	private String caption;
+	private int likes;
+	private List<String> comments;
+
+	@Lob
+	@Basic(fetch = FetchType.LAZY)
+	@Column(columnDefinition = "LONGBLOB")
+	private byte[] photo;
+
+	public Post() {
+		super();
+		// TODO Auto-generated constructor stub
+	}
+
+	
+
+	public int getLikes() {
+		return likes;
+	}
+
+
+
+	public void setLikes(int likes) {
+		this.likes = likes;
+	}
+
+
+
+	public List<String> getComments() {
+		return comments;
+	}
+
+
+
+	public void setComments(List<String> comments) {
+		this.comments = comments;
+	}
+
+
+
+	public Post(Long id, String caption, int likes, List<String> comments, byte[] photo) {
+		super();
+		this.id = id;
+		this.caption = caption;
+		this.likes = likes;
+		this.comments = comments;
+		this.photo = photo;
+	}
+
+
+
+	public Long getId() {
+		return id;
+	}
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+
+	public String getCaption() {
+		return caption;
+	}
+
+	public void setCaption(String caption) {
+		this.caption = caption;
+	}
+
+	public byte[] getPhoto() {
+		return photo;
+	}
+
+	public void setPhoto(byte[] photo) {
+		this.photo = photo;
+	}
+
+	public String getPhotoBase64() {
+        if (photo == null) {
+            return null;
+        }
+        return Base64.getEncoder().encodeToString(photo);
+    }
+
+
+
+	@Override
+	public String toString() {
+		return "Post [id=" + id + ", caption=" + caption + ", likes=" + likes + ", comments=" + comments + ", photo="
+				+ Arrays.toString(photo) + "]";
+	}
+	
+}
